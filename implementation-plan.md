@@ -31,6 +31,11 @@ ml_orchestrator/
 │   ├── modeling.py          # loads available models from registry
 │   ├── tuning.py            # uses model's declared param grid
 │   └── evaluation.py        # uses model's declared metrics
+├── formats/
+│   ├── base.py              # BaseFormat interface
+│   ├── registry.py          # auto-discovers all formats by extension
+│   ├── csv_format.py
+│   └── parquet_format.py    # add new formats here — registry picks them up automatically
 ├── models/
 │   ├── base.py              # BaseModel interface (see Model Registry section)
 │   ├── registry.py          # discovers and registers all models in this dir
