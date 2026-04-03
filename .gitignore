@@ -1,0 +1,35 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# uv
+.uv/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# ML artifacts (user project outputs — not part of this repo)
+*.joblib
+*.pkl
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
