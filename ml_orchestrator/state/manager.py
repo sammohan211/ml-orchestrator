@@ -179,7 +179,7 @@ def _prompt_settings() -> dict:
 
 def _validate_type(value: str, value_type: type) -> bool | str:
     try:
-        if value_type == bool:
+        if value_type is bool:
             if value.lower() not in ("true", "false"):
                 return "Enter 'true' or 'false'."
         else:
@@ -190,7 +190,7 @@ def _validate_type(value: str, value_type: type) -> bool | str:
 
 
 def _cast(value: str, value_type: type):
-    if value_type == bool:
+    if value_type is bool:
         return value.lower() == "true"
     return value_type(value)
 

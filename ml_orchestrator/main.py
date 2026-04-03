@@ -4,7 +4,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from ml_orchestrator.state.manager import create_project, load_project, save_state
+from ml_orchestrator.state.manager import create_project, load_project
 from ml_orchestrator.stages import ingestion
 
 app = typer.Typer(add_completion=False)
