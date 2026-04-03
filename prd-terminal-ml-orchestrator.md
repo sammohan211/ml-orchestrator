@@ -510,7 +510,7 @@ ML Workflow Helper
 6. Prepare Features
 7. Select Features
 8. Train Baseline Model
-9. Tune Model
+9. Tune Hyperparameters
 10. Evaluate Model
 11. Export Artifacts
 12. Settings
