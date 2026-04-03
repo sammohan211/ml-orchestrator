@@ -4,6 +4,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
+from ml_orchestrator.state.manager import create_project, load_project, save_state
+
 app = typer.Typer(add_completion=False)
 console = Console()
 
@@ -24,23 +26,51 @@ MENU_ITEMS = [
 ]
 
 
-def show_menu() -> None:
+def show_menu(state: dict | None) -> None:
     lines = Text()
     for key, label in MENU_ITEMS:
-        lines.append(f"  {key:>2}.  {label}\n")
-    console.print(Panel(lines, title="ML Workflow Helper", border_style="blue"))
+        status = _stage_status(key, state)
+        lines.append(f"  {key:>2}.  {label}  {status}\n")
+    title = f"ML Workflow Helper — {state['project']['name']}" if state else "ML Workflow Helper"
+    console.print(Panel(lines, title=title, border_style="blue"))
 
 
-def handle_choice(choice: str) -> bool:
+def _stage_status(menu_key: str, state: dict | None) -> str:
+    """Return a coloured status indicator for menu items that map to a stage."""
+    if state is None:
+        return ""
+    stage_map = {
+        "3": "ingestion",
+        "4": "profiling",
+        "5": "cleaning",
+        "6": "feature_preparation",
+        "7": "feature_selection",
+        "8": "modeling",
+        "9": "tuning",
+        "10": "evaluation",
+        "11": "export",
+    }
+    stage = stage_map.get(menu_key)
+    if not stage:
+        return ""
+    status = state.get("stages", {}).get(stage, "pending")
+    if status == "completed":
+        return "[green]✓[/green]"
+    if status == "skipped":
+        return "[dim]—[/dim]"
+    return ""
+
+
+def handle_choice(choice: str, state: dict | None) -> tuple[bool, dict | None]:
     """
-    Dispatch menu selection. Returns False when the user chooses to exit,
-    True otherwise so the menu loop continues.
+    Dispatch menu selection.
+    Returns (should_continue, updated_state).
     """
     match choice:
         case "1":
-            console.print("[yellow]Start New Project — not yet implemented.[/yellow]")
+            state = _start_new_project()
         case "2":
-            console.print("[yellow]Load Existing Project — not yet implemented.[/yellow]")
+            state = _load_existing_project()
         case "3":
             console.print("[yellow]Read Dataset — not yet implemented.[/yellow]")
         case "4":
@@ -63,20 +93,63 @@ def handle_choice(choice: str) -> bool:
             console.print("[yellow]Settings — not yet implemented.[/yellow]")
         case "13":
             console.print("[blue]Goodbye.[/blue]")
-            return False
+            return False, state
         case _:
             console.print("[red]Invalid selection. Please enter a number from 1 to 13.[/red]")
-    return True
+    return True, state
+
+
+def _start_new_project() -> dict | None:
+    from pathlib import Path
+
+    name = questionary.text(
+        "Project name:",
+        validate=lambda v: bool(v.strip()) or "Project name cannot be empty.",
+    ).ask()
+    if name is None:
+        return None
+
+    directory = questionary.text(
+        "Parent directory for this project:",
+        default=str(Path.home()),
+        validate=lambda v: Path(v).expanduser().exists() or "Directory does not exist.",
+    ).ask()
+    if directory is None:
+        return None
+
+    try:
+        return create_project(name.strip(), str(Path(directory.strip()).expanduser()))
+    except Exception as e:
+        console.print(f"[red]Failed to create project: {e}[/red]")
+        return None
+
+
+def _load_existing_project() -> dict | None:
+    from pathlib import Path
+
+    path = questionary.text(
+        "Path to project directory or state.yaml:",
+        validate=lambda v: Path(v).expanduser().exists() or "Path does not exist.",
+    ).ask()
+    if path is None:
+        return None
+
+    try:
+        return load_project(str(Path(path.strip()).expanduser()))
+    except Exception as e:
+        console.print(f"[red]Failed to load project: {e}[/red]")
+        return None
 
 
 @app.command()
 def main() -> None:
     """ML Workflow Helper — terminal-based ML orchestrator for tabular data."""
     valid_choices = {key for key, _ in MENU_ITEMS}
+    state: dict | None = None
 
     while True:
         console.print()
-        show_menu()
+        show_menu(state)
 
         choice = questionary.text(
             "Select an option:",
@@ -84,11 +157,10 @@ def main() -> None:
         ).ask()
 
         if choice is None:
-            # User pressed Ctrl+C at the prompt
             console.print("\n[blue]Goodbye.[/blue]")
             break
 
         console.print()
-        should_continue = handle_choice(choice)
+        should_continue, state = handle_choice(choice, state)
         if not should_continue:
             break

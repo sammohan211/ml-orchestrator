@@ -25,6 +25,28 @@ project:
   schema_version: "1.0"
 
 # ---------------------------------------------------------------------------
+# Settings
+# Presented to the user at project creation and editable via Settings menu.
+# All stages read from here — config/defaults.py is only the fallback.
+# ---------------------------------------------------------------------------
+settings:
+  # Feature preparation
+  test_size: 0.2
+  random_seed: 42
+  stratified: true          # classification only; ignored for regression
+
+  # Feature selection
+  feature_selection_threshold: 0.01   # minimum importance score to retain a feature
+
+  # Hyperparameter tuning
+  cv_folds: 5
+  tuning_n_iter: 20         # number of iterations for RandomizedSearchCV
+
+  # Profiling
+  high_cardinality_threshold: 50      # unique values above this triggers a warning
+  class_imbalance_threshold: 0.75     # majority class above this triggers a warning
+
+# ---------------------------------------------------------------------------
 # Stage Completion Status
 # Used by the menu to show progress and enforce soft ordering warnings.
 # Values: pending | completed | skipped
