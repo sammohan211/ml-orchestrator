@@ -62,6 +62,7 @@ The product should feel like a structured workflow guide, not a black-box AutoML
 
 The following are explicitly out of scope for V1:
 
+- multi-table datasets requiring joins or aggregations
 - deep learning workflows
 - image, video, audio, or NLP-specific pipelines
 - model deployment or serving
@@ -135,7 +136,7 @@ The terminal interface is the primary experience, not a temporary interface befo
 - new project creation
 - existing project loading
 - dependency checking and optional installation
-- CSV and Parquet dataset ingestion
+- single flat-table CSV and Parquet dataset ingestion (no joins or multi-table workflows)
 - schema inspection and profiling
 - data quality checks
 - data cleaning - missing values handling, duplicate removal, and column exclusion 
