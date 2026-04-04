@@ -1,6 +1,5 @@
 import importlib
 import subprocess
-import sys
 from datetime import datetime
 
 import questionary
@@ -113,10 +112,10 @@ def _is_installed(package: str) -> bool:
 
 
 def _install(package: str) -> bool:
-    """Install a package via pip into the current environment. Returns True on success."""
+    """Install a package via uv into the current environment. Returns True on success."""
     console.print(f"[blue]Installing {package}...[/blue]")
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", package],
+        ["uv", "pip", "install", package],
         capture_output=True,
         text=True,
     )

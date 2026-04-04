@@ -5,7 +5,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from ml_orchestrator.state.manager import create_project, load_project
-from ml_orchestrator.stages import ingestion
+from ml_orchestrator.stages import ingestion, profiling
 
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -78,7 +78,10 @@ def handle_choice(choice: str, state: dict | None) -> tuple[bool, dict | None]:
             else:
                 state = ingestion.run(state)
         case "4":
-            console.print("[yellow]Profile Dataset — not yet implemented.[/yellow]")
+            if state is None:
+                console.print("[yellow]No project loaded. Please create or load a project first (options 1 or 2).[/yellow]")
+            else:
+                state = profiling.run(state)
         case "5":
             console.print("[yellow]Clean Dataset — not yet implemented.[/yellow]")
         case "6":

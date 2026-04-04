@@ -63,6 +63,18 @@ stages:
   export: completed
 
 # ---------------------------------------------------------------------------
+# Data Dictionary
+# Populated during profiling stage. User-provided descriptions and renames.
+# ---------------------------------------------------------------------------
+data_dictionary:
+  dataset_description: "Customer churn dataset from a telecom provider"
+  columns:
+    CustomerID:      { renamed_to: null,          description: "Unique customer identifier" }
+    tenure:          { renamed_to: months_active,  description: "Number of months as a customer" }
+    MonthlyCharges:  { renamed_to: null,          description: "Monthly billing amount in USD" }
+    Churn:           { renamed_to: null,          description: "Target: whether customer churned (Yes/No)" }
+
+# ---------------------------------------------------------------------------
 # Data Ingestion
 # ---------------------------------------------------------------------------
 ingestion:
