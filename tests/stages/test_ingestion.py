@@ -15,9 +15,10 @@ class TestRunGuard:
     def test_returns_state_on_cancelled_prompt(self, minimal_state):
         """Ingestion has no project guard — it's protected at the menu level.
         Cancelling the file path prompt (questionary returns None) should return state unchanged."""
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
         from ml_orchestrator.stages.ingestion import run
-        with patch("questionary.text") as mock_text:
+        with patch("ml_orchestrator.stages.ingestion.check_and_install", return_value=(True, minimal_state)), \
+             patch("questionary.text") as mock_text:
             mock_text.return_value.ask.return_value = None
             result = run(minimal_state)
         assert result["stages"]["ingestion"] == "completed"  # unchanged from fixture
