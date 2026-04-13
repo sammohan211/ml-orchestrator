@@ -18,6 +18,9 @@ build/
 *.joblib
 *.pkl
 
+# Personal notes
+ML_Notes/
+
 # Environment
 .env
 
