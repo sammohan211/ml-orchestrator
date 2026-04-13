@@ -221,6 +221,21 @@ This keeps algorithm-specific knowledge (param grids, metrics, artifact types) c
   - For each column with nulls: prompt strategy — drop column, drop rows, impute (mean/median/mode/constant), skip
   - Offer "remove duplicate rows" with confirmation
   - Offer "exclude columns from modeling" — multi-select via `questionary.checkbox`
+  - **Outlier handling** — for each numeric column flagged as having outliers during profiling:
+    - Detect using z-score (threshold: ±3), IQR (1.5×IQR), or MAD (robust, threshold configurable)
+    - Show count and % of outlier rows per column
+    - Prompt user for treatment: clip to boundary, remove rows, flag as new binary column, or skip
+    - Log decisions to state (`cleaning_actions`)
+  - **Class imbalance handling** — for classification tasks where target is known:
+    - Show class distribution and imbalance ratio after target column is set
+    - If ratio exceeds threshold (default: 5:1), warn user and offer treatment options:
+      - Oversample minority class: `RandomOverSampler` (imbalanced-learn)
+      - Undersample majority class: `RandomUnderSampler` (imbalanced-learn)
+      - Synthetic oversampling: `SMOTE` (imbalanced-learn, requires optional install)
+      - Use class weights: record `class_weight='balanced'` in state for modeling stage to apply
+      - Skip (user handles imbalance at modeling time)
+    - Sampling applied after train/test split to avoid leakage (only on train set)
+    - Log decision to state (`imbalance_strategy`)
   - Show summary of all actions before applying
   - Apply actions to in-memory dataframe; save cleaned dataset to `<project_dir>/artifacts/cleaned_dataset.csv`
   - Log all decisions to state (`cleaning_actions`)
@@ -230,6 +245,9 @@ This keeps algorithm-specific knowledge (param grids, metrics, artifact types) c
 - All cleaning choices are shown back to user before applying
 - Cleaning actions are saved in state and reloadable
 - Cleaned dataset is written to artifacts directory
+- Outlier treatment options are shown only for columns flagged during profiling
+- Class imbalance warning and treatment shown only for classification tasks
+- SMOTE and sampler options degrade gracefully if `imbalanced-learn` is not installed (offer install via dependency manager)
 - Skipping cleaning entirely is allowed (state records "no cleaning")
 
 ---
@@ -246,7 +264,16 @@ This keeps algorithm-specific knowledge (param grids, metrics, artifact types) c
   - Prompt for test split ratio (default from `config/defaults.py`: 0.2)
   - Prompt for random seed (default: 42)
   - Prompt for stratification (classification only)
-  - For each non-target column: recommend encoding (one-hot, ordinal, target encode) or scaling (standard, minmax, none) based on dtype
+  - For each non-target column: recommend encoding (one-hot, ordinal, target encode) or scaling based on dtype
+  - Supported scaling options:
+    - None (no scaling)
+    - Standard Scaling (Z-score): `StandardScaler()` — default recommendation for most algorithms
+    - Zero-centering: `StandardScaler(with_mean=True, with_std=False)` — mean removal only
+    - Range Scaling (Min-Max): `MinMaxScaler()` — for neural networks, KNN, ReLU activations
+    - Robust Scaling: `RobustScaler()` — when data has significant outliers
+    - Normalization (L2): `Normalizer(norm='l2')` — per-sample unit norm, useful for angle-based similarity
+    - Whitening: `StandardScaler` + `PCA(whiten=True)` — decorrelates features, zero mean, unit variance
+  - When user selects a scaler, show an algorithm-applicability hint (e.g. warn if Range Scaling is chosen for a tree-based model, as trees are scale-invariant)
   - Show recommendations as a table; allow user to override per column
   - Apply split and transformations; save transformer pipeline to state
   - Save `target_column`, `problem_type`, `split_config` to state
