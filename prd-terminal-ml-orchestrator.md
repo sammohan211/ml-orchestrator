@@ -68,29 +68,37 @@ The following are explicitly out of scope for V1:
 - model deployment or serving
 - real-time monitoring
 - distributed training
-- web dashboard UI
+- web dashboard UI (Streamlit companion views for visual stages are a V2 candidate per §16 — not a dashboard replacement of the terminal workflow)
 - feature store support
 - end-to-end MLOps orchestration
 - AutoML optimization across many model families
+- multi-user collaboration
+- cloud integration or remote execution
 
 ---
 
 ## 6. Target Users
 
+The product is designed around two primary personas. Other groups benefit but are not the design center — when tradeoffs arise, decisions resolve in favor of the primary users.
+
 ### Primary Users
-- students learning applied ML
-- data analysts
-- solo practitioners
-- junior data scientists
-- ML engineers building baseline workflows
-- developers working in terminal-heavy or remote environments
+- **Solo ML practitioners and junior data scientists** working on tabular problems — have baseline ML knowledge, want to reduce boilerplate, value reproducibility and the ability to resume projects
+- **ML engineers setting up baselines** — want a fast scaffold for new tabular problems before iterating or handing off to a deeper modeling workflow
+
+### Secondary Users (benefit but do not drive design decisions)
+- **Students learning applied ML** — the structured, transparent workflow serves as a learning scaffold, but the product is not an educational tool and does not over-explain
+- **Data analysts with some ML exposure** — can produce baseline models without writing boilerplate, but are expected to understand concepts like imputation strategy, encoding, and train/test split
+
+### Out of Frame
+- Non-technical users expecting an AutoML black box — the product is a workflow guide, not an automated modeler
+- Deep-learning, non-tabular, or production-serving workflows (see §5 Non-Goals)
 
 ### User Characteristics
-- comfortable using a terminal
+- comfortable using a terminal, often in remote or SSH environments
 - working primarily with tabular data
-- want faster setup with less boilerplate
-- still want visibility into the workflow decisions being made
-- prefer tools that don't require writing boilerplate from scratch
+- have baseline ML knowledge — know what imputation, encoding, and train/test splits are
+- want faster setup with less boilerplate, while keeping visibility into decisions
+- prefer tools that don't hide what's happening
 
 ---
 
@@ -125,28 +133,32 @@ Workflow decisions, transformations, and outputs must be saved and audited so a 
 Each workflow stage is self-contained and can be run, skipped, or revisited independently.
 
 ### 8.5 Terminal-First Experience
-The terminal interface is the primary experience, not a temporary interface before a GUI. Browser-assisted visualization is a supported pattern — inline terminal charts are shown during the workflow, and richer HTML reports may be auto-opened in the browser at the user's discretion.
+The terminal interface is the primary experience, not a temporary interface before a GUI. Browser-assisted visualization is a supported companion pattern — inline terminal charts are shown during the workflow, and richer reports (static HTML in V1; interactive Streamlit views as a V2 candidate per §16) may be opened in the browser at the user's discretion. Companion surfaces do not replace the terminal menu; the workflow backbone — navigation, prompts, decisions, logging, export — remains terminal-native.
 
 ---
 
 ## 9. Product Scope
 
 ### In Scope for V1
+
+This is the single canonical scope list for V1. MVP and V1 are treated as equivalent — §15 references this list rather than duplicating it.
+
 - terminal-based menu system
 - new project creation
 - existing project loading
 - dependency checking and optional installation
 - single flat-table CSV and Parquet dataset ingestion (no joins or multi-table workflows)
-- schema inspection and profiling
-- data quality checks
-- data cleaning - missing values handling, duplicate removal, and column exclusion 
-- feature preparation guidance
-- feature selection
-- baseline classification and regression workflows
+- schema inspection and profiling, including data quality warnings and leakage heuristics
+- data cleaning — missing values, duplicates, column exclusion, outlier handling, and class imbalance handling
+- feature preparation — target selection, train/test split, encoding, scaling
+- feature selection with at least one method
+- baseline classification and regression models with a pluggable model registry
+- hyperparameter tuning (grid and randomized search)
 - model evaluation with task-appropriate metrics
-- artifact export
-- session persistence
-- hyperparameter tuning
+- inline terminal charts at profiling, feature selection, and evaluation stages
+- static HTML reports opened in the browser at the user's option after key stages
+- artifact export — cleaned dataset, config, feature list, evaluation summary, sklearn Pipeline, logs
+- session persistence and resume
 
 ---
 
@@ -254,9 +266,15 @@ The product must support:
 - CSV input
 - Parquet input
 - dataset preview
-- file path validation
+- interactive file path input with tab-completion, path validation, and clear errors for invalid, missing, or unsupported files
 - row and column count
 - inferred schema summary
+
+**CSV Ingestion Robustness.** For CSV files, the product must:
+- auto-detect the field delimiter (comma, tab, semicolon, pipe) with user override available
+- auto-detect file encoding (UTF-8 with a fallback to latin-1) with user override available
+- detect whether the first row is a header and allow the user to override the choice
+- surface a structured error identifying the offending row and column when a file fails to parse, rather than a raw stack trace
 
 ### 12.4 Profiling
 The product must provide:
@@ -269,7 +287,15 @@ The product must provide:
 - warnings for highly unique ID-like columns
 - warnings for high-cardinality categorical features
 - warnings for severe class imbalance where target exists
-- heuristic warnings for possible data leakage
+- warnings for outliers in numeric columns (z-score, IQR, or MAD-based detection), surfaced for use in the cleaning stage
+- heuristic warnings for possible data leakage, covering at minimum:
+  - column names matching suspicious patterns (e.g. names containing the target column name, or tokens such as `target`, `label`, `leak`)
+  - features with near-perfect correlation to the target
+
+Each leakage warning must:
+- include the reasoning — which rule fired, which column, and the triggering value (e.g. correlation coefficient)
+- be surfaced as a suspicion rather than a verdict; the product must not automatically drop or transform columns based on a leakage warning
+- require explicit user action to accept (exclude from modeling) or dismiss, with the decision logged to project state
 
 The product must display an inline terminal chart summarizing missing values and column distributions after profiling completes.
 
@@ -285,10 +311,24 @@ The product must allow users to:
 - inspect missingness
 - drop rows
 - drop columns
-- select imputation strategies
+- select imputation strategies (at minimum: mean, median, mode, constant value)
 - remove duplicates
 - exclude columns from downstream modeling
 - review and save cleaning decisions
+
+**Outlier Handling.** For each numeric column flagged as containing outliers during profiling, the product must:
+- show outlier count and percentage per column
+- allow the user to choose a detection method: z-score (default threshold ±3), IQR (1.5×IQR), or MAD
+- offer treatment options per column: clip to boundary, remove rows, flag outliers as a new binary column, or skip
+- log outlier decisions to project state
+
+**Class Imbalance Handling.** For classification tasks where a target column has been set, the product must:
+- show class distribution and imbalance ratio
+- warn the user when the ratio exceeds a configurable threshold (default 5:1)
+- offer treatment options: random oversampling of the minority class, random undersampling of the majority class, synthetic oversampling (SMOTE), use of class weights applied at modeling time, or skip
+- apply sampling only to the training split, after the train/test split, to prevent leakage
+- log imbalance strategy to project state
+- degrade gracefully when optional dependencies (e.g. `imbalanced-learn`) are not installed — prompt the user via the dependency manager
 
 ### 12.6 Feature Preparation
 The product must support:
@@ -298,8 +338,23 @@ The product must support:
 - optional stratification for classification
 - recommendation of encoding strategy per categorical column
 - recommendation of scaling strategy per numerical column
-- support for common encoding choices
-- support for basic scaling where appropriate
+- user override of any recommendation on a per-column basis
+
+**Encoding Options.** The product must support, at minimum:
+- one-hot encoding
+- ordinal encoding
+- target encoding
+
+**Scaling Options.** The product must support, at minimum:
+- no scaling
+- standard scaling (z-score)
+- zero-centering (mean removal only)
+- range scaling (min-max)
+- robust scaling (for data with outliers)
+- L2 normalization (per-sample unit norm)
+- whitening (standard scaling combined with decorrelation)
+
+**Algorithm-Applicability Hints.** When a user selects a scaler, the product must surface a hint if the choice is likely inappropriate for the selected model family — for example, warning when range scaling is applied before a tree-based model, since tree-based models are scale-invariant.
 
 ### 12.7 Feature Selection
 The product must provide at least one of:
@@ -317,12 +372,19 @@ The product must display an inline terminal chart of feature scores or importanc
 
 ### 12.8 Baseline Modeling
 The product must:
-- infer likely problem type
-- allow user override of problem type
-- support at least one classification baseline model
-- support at least one regression baseline model
-- allow default or basic model parameter configuration
-- support basic hyperparameter search with user approval
+- infer likely problem type from the target column — classification when the target is categorical or a low-cardinality integer, regression otherwise
+- allow user override of the inferred problem type
+- provide a pluggable model registry so algorithms can be added without changes to stage code
+- ship with the following baseline models in V1:
+  - classification: Logistic Regression, Random Forest
+  - regression: Linear Regression, Random Forest
+- allow each model to declare its default parameters, tuning search space, supported metrics, and output artifacts
+- allow the user to accept defaults or override basic parameters before training
+- support hyperparameter search, gated by explicit user approval, with at minimum:
+  - grid search with cross-validation
+  - randomized search with cross-validation
+- default to 5-fold cross-validation, user-configurable
+- show best parameters and CV score improvement over the untuned baseline
 
 ### 12.9 Evaluation
 The product must display metrics appropriate to the task.
@@ -359,6 +421,30 @@ The product must:
 - support installation in a controlled environment where possible
 - log dependency actions
 - recover gracefully from installation failure
+
+### 12.12 Dataset-Aware Recommendations (cross-cutting)
+
+The product must generate recommendations throughout the workflow that are informed by properties of the loaded dataset, not by fixed defaults alone. This operationalizes the §4 goal "surface dataset-aware recommendations to guide cleaning and feature preparation decisions."
+
+**Signals used.** Recommendations must draw on at minimum:
+- column dtype (numeric, categorical, datetime, string)
+- cardinality and uniqueness
+- missingness rate and pattern
+- skewness and presence of outliers for numeric columns
+- correlation with the target (where target is known)
+- selected problem type and model family
+
+**Stages that produce dataset-aware recommendations.**
+- profiling — quality warnings, leakage heuristics, outlier detection, class imbalance detection
+- cleaning — imputation strategy suggestions per column, outlier treatment defaults
+- feature preparation — encoding strategy per categorical column, scaling strategy per numeric column, algorithm-applicability hints
+- feature selection — method-appropriate defaults for threshold, k, or estimator choice based on dataset size and target type
+
+**Interaction model.** Every recommendation must:
+- be shown to the user alongside the signal that produced it
+- allow the user to accept, override, or skip
+- never be auto-applied without a confirmation step
+- have its outcome (accepted, overridden, skipped) logged to project state for reproducibility
 
 ---
 
@@ -398,14 +484,16 @@ The product must:
 
 ---
 
-## 14. Success Metrics
+## 14. Acceptance Criteria and Success Indicators
 
-The product will be considered successful for V1 if a user can:
+### 14.1 Functional Acceptance Criteria
+
+The product will be considered functionally complete for V1 if a user can:
 
 - create a project from the terminal
 - load a CSV or Parquet dataset
 - review a profiling summary
-- perform cleaning actions - handling missing values, remove duplicates, and exclude unwanted columns
+- perform cleaning actions — handle missing values, remove duplicates, exclude unwanted columns, treat outliers, and address class imbalance where present
 - run feature preparation and selection
 - train a baseline model
 - view evaluation metrics
@@ -413,41 +501,37 @@ The product will be considered successful for V1 if a user can:
 - export artifacts and workflow configuration
 - resume the project later without losing state
 
-Additional qualitative success indicators:
-- users spend less time writing repetitive setup code
+### 14.2 Quantitative Performance Targets
+
+| Metric | Target |
+|--------|--------|
+| Time from project creation to first trained baseline model | < 10 minutes on a tabular dataset ≤ 100k rows and ≤ 50 columns |
+| Full end-to-end workflow completion time (ingest → export) | < 20 minutes on a tabular dataset ≤ 100k rows and ≤ 50 columns |
+| Maximum supported dataset size (interactive responsiveness) | ~1M rows, ~500 columns on a standard laptop (see §13 Performance) |
+| Unhandled errors during a standard workflow run on a valid dataset | 0 |
+| Reproducibility: exported config rerun on the same dataset | produces identical outputs |
+| Reproducibility: exported sklearn Pipeline on the same dataset | produces identical predictions |
+| State recovery after reload | all prior decisions and artifacts restored without loss |
+
+### 14.3 Qualitative Success Indicators
+
+Observed rather than strictly measured:
+
+- users spend less time on setup boilerplate than they would writing equivalent notebook code from scratch
 - users can explain what the application did at each stage
-- generated artifacts are sufficient for reruns and review. Exported config produces the same results on the same dataset
-- exported sklearn Pipeline is loadable and produces the same predictions on the same dataset
-- users do not encounter unhandled errors during a standard workflow run
+- generated artifacts are sufficient for reruns, review, and handoff
+- users trust the workflow enough to run it on non-toy datasets after initial learning
 
 ---
 
 ## 15. MVP Definition
 
-### MVP Includes
-- menu-driven terminal interface
-- project create/load flow
-- CSV and Parquet loading
-- dataset summary and profiling
-- missing value and duplicate handling
-- target selection
-- train/test split setup
-- feature preparation with encoding and sclaing support
-- one or more feature selection methods
-- baseline classification and regression models
-- evaluation metrics and performance summary export
-- hyperparameter tuning
-- inline terminal charts and browser-accessible HTML reports after key stages
-- artifact export
-- dependency check with explicit user approval for install
-- project state persistence
+MVP and V1 are equivalent. The product ships as a single release — there is no phased MVP-then-V1 distinction.
 
-### MVP Excludes
-- advanced visualization dashboards
-- large model search
-- deployment workflows
-- multi-user collaboration
-- cloud integration
+- **Scope included in the MVP:** as defined in §9 "In Scope for V1"
+- **Scope excluded from the MVP:** as defined in §5 "Non-Goals"
+
+This section exists to make the equivalence explicit and to prevent the MVP and V1 scope lists from drifting apart over time.
 
 ---
 
@@ -458,7 +542,7 @@ Additional qualitative success indicators:
 - dependency installation may behave differently across environments
 - inline charts and browser-assisted HTML reports mitigate visualization limits, but terminal chart fidelity remains constrained
 - scope creep may weaken overall polish
-- leakage detection heuristics may produce false positives
+- leakage detection heuristics may produce false positives — mitigated by surfacing each warning with its reasoning (rule, column, triggering value), never auto-applying action, and requiring explicit user accept or dismiss (see §12.4)
 - state corruption on interrupted runs
 - imputation and encoding choices silently affecting results
 
@@ -468,6 +552,7 @@ Yes, strongly recommended
 - should the product generate a Python script, notebook, or both in V1? Scripts for V1, no notebooks
 - should profiling use a built-in summary first and richer external reporting optionally? Built-in profiling
 - should the application support a command mode alongside the interactive menu mode? Menu for V1
+- should a future version offer a Streamlit-based UI as an alternative to the terminal interface? V2 direction resolved: Streamlit + Plotly as *companion* surfaces for visual, exploratory stages only — profiling, feature selection, evaluation. Launched on-demand from the terminal, replacing the static HTML reports described in §12.4 and §12.9. The terminal remains the workflow backbone (navigation, prompts, decisions, logging, export). Ingestion, cleaning, feature prep, modeling, and tuning stay terminal-only — decision-heavy surfaces where prompts are faster than a web form, and remote/SSH users are never forced through a browser. Ingestion in V1 uses tab-completing path input to reduce terminal jankiness without requiring Streamlit.
 
 ---
 
@@ -486,6 +571,7 @@ Yes, strongly recommended
 - `joblib` for model serialization
 - `venv` and `subprocess` for environment and package handling
 - optional profiling support via `ydata-profiling`
+- **V2 companion UI** (post-V1): `streamlit` + `plotly` for interactive visual surfaces at profiling, feature selection, and evaluation stages only. Launched on-demand from the terminal; replaces the static HTML report prompts from V1. Does not replace the terminal menu. Ingestion, cleaning, feature prep, modeling, and tuning remain terminal-only.
 
 ### Architectural Components
 - terminal UI layer

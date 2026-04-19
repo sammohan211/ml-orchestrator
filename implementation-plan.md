@@ -160,7 +160,7 @@ This keeps algorithm-specific knowledge (param grids, metrics, artifact types) c
 
 ### Tasks
 - [ ] Implement `stages/ingestion.py`:
-  - Prompt for file path with validation
+  - Prompt for file path using `questionary.path()` — tab-completion, path validation, re-prompt on invalid input
   - Load CSV (`pandas.read_csv`) or Parquet (`pandas.read_parquet`)
   - Display using `rich.Table`: row count, column count, inferred dtype per column
   - Show first 5 rows as a preview
@@ -475,3 +475,27 @@ ydata-profiling>=4.0 # optional, checked at runtime
 - [x] Generated artifact format: sklearn `Pipeline` object, serialized with `joblib`, with clear step comments
 - [x] GitHub: public repo, `main` / `dev` branches, merge to `main` at each phase completion
 - [x] GitHub Actions: lint + tests on push to `dev` and `main`
+
+---
+
+## V2 Preview: Streamlit Companion UI (Post-V1)
+
+Not implemented in V1. Listed here so V1 phase-level design choices (artifact formats, state schema, HTML report stubs) stay compatible with a future Streamlit layer and do not require rework.
+
+### Scope
+Streamlit + Plotly as on-demand companion surfaces for visual, exploratory stages. Launched from the terminal after a stage completes; replaces the static HTML report prompts in V1 Phases 5, 8, and 10.
+
+### Stages with a Streamlit companion view
+- **Profiling (Phase 5):** interactive column-level drill-down, filterable distributions, cross-column correlation views
+- **Feature Selection (Phase 8):** interactive feature importance charts, side-by-side comparison of selection methods
+- **Evaluation (Phase 10):** interactive confusion matrix, ROC/PR curves with threshold slider, residual plots, prediction inspection
+
+### Stages that stay terminal-only
+- Ingestion, cleaning, feature prep, modeling, tuning — decision-heavy surfaces where menus/prompts are faster than a web form
+- Remote/SSH users are never forced through a browser for core workflow steps
+
+### Implementation notes
+- Streamlit apps read the same project state YAML and artifact files — no new storage layer
+- Launched via `streamlit run` in a subprocess from the terminal; terminal resumes after user closes the view
+- `streamlit` and `plotly` are optional dependencies, gated behind the same dependency manager used for `ydata-profiling`
+- Plotext inline charts remain in V1 and V2 (fast inline feedback); Streamlit views are the optional deeper surface
